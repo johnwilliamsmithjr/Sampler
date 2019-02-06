@@ -93,7 +93,8 @@ C_samples[, , 1] <- C
 
 for (i in 2:chain_length){
   ## Metropolis Step for p_i ##
-  p[i,] <- p[i-1,]
+  #p[i,] <- p[i-1,]
+  p[i,] <- p_e
   buildCpredi <- Cpred(p[i,], C_samples[, , i-1], LAI, maxt, mint, Ca, lat_e, yearday, Nit_e, rad, 730)
   Cpredi <- cbind(buildCpredi$Cfpred, buildCpredi$Cwpred, buildCpredi$Crpred,
                  buildCpredi$Clitpred, buildCpredi$Csompred)
@@ -109,7 +110,7 @@ for (i in 2:chain_length){
     buildCpredstar <- Cpred(p_star, C_samples[, , i-1], LAI, maxt, mint, Ca, lat_e, yearday, Nit_e, rad, 730)
     Cpred_star <- cbind(buildCpredstar$Cfpred, buildCpredstar$Cwpred, buildCpredstar$Crpred,
                        buildCpredstar$Clitpred, buildCpredstar$Csompred)
-    #rm(buildCpredstar)
+    rm(buildCpredstar)
     
     threshold <- cpp_ss_likelihood(Cobs_samples[, , i-1], C_samples[, , i-1], c(.25,16,2.25, .25, 9), Cpred_star, c(sd_cf^2,sd_cw^2,sd_cr^2, sd_clit^2, sd_csom^2), 
                                   c(100,9200,100,20,11000), c(4,4,4,4,4), 730) - 
@@ -187,11 +188,12 @@ for (i in 2:chain_length){
                       + prec_obs[4]*Cobs_samples[k,4,i-1]) / (prec_add[4]*(1 + (a_tp)^2 ) + prec_obs[4]),
                       sd = 1 / sqrt((prec_add[4]*(1 + (a_tp)^2 ) + prec_obs[4])))
     
-    a_t <- p[i,6]*C_samples[k-1,2,i] + .5*p[i,1]*exp(.5*p[i,10]*(mint[k] + maxt[k]))*C_samples[k-1,4,i]
-    a_tp <- p[i,6]*C_samples[k,2,i] + .5*p[i,1]*exp(.5*p[i,10]*(mint[k+1] + maxt[k+1]))*C_samples[k,4,i]
+    a_t <- 1 - .5*p[i,9]*exp(.5*p[i,10]*(maxt[k] + mint[k]))
+    a_tp <- 1 - .5*p[i,9]*exp(.5*p[i,10]*(maxt[k+1] + mint[k+1]))
     
-    b_t <- 1 - .5*p[i,9]*exp(.5*p[i,10]*(maxt[k] + mint[k]))
-    b_tp <- 1 - .5*p[i,9]*exp(.5*p[i,10]*(maxt[k+1] + mint[k+1]))
+    b_t <- p[i,6]*C_samples[k-1,2,i] + .5*p[i,1]*exp(.5*p[i,10]*(mint[k] + maxt[k]))*C_samples[k-1,4,i]
+    b_tp <- p[i,6]*C_samples[k,2,i] + .5*p[i,1]*exp(.5*p[i,10]*(mint[k+1] + maxt[k+1]))*C_samples[k,4,i]
+    
     
     C_samples[k,5,i] <- rnorm(n = 1, 
                       mean = (prec_add[5]*(a_t*C_samples[k-1,5,i] +b_t ) + prec_add[5]*(a_tp*C_samples[k+1,5,i]-a_tp*b_tp) 
