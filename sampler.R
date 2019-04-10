@@ -1,4 +1,4 @@
-## Program: sampler_progress.R
+## Program: sampler.R
 ## Author: John W Smith Jr
 ## Date: Feb 19th, 2019
 ## Description: Runs an MCMC routine in order to estimate parameters in an ecosystem state space model, in 
@@ -7,7 +7,7 @@
 ## Changes working directory 
 setwd('~/Reflex/Sampler')
 ## Create vector for initial condition mean + stdev, as well as variances and precisions for obs and add
-init_var <- c(4,4,4,4,4)
+init_var <- c(1,4,.5,.5,4)
 init_mean <- c(100,9200,100,20,11000)
 #var_add <- c(.25^2, 1, (.03125/4)^2, .25, 1)
 var_add <- c(2, 9, (.03125/4)^2, .25, 16)
@@ -31,6 +31,7 @@ sourceCpp('./src/likelihood_SS.cpp')
 sourceCpp('./src/lgamma.cpp')
 sourceCpp('./src/Cpred.cpp')
 source('cpp_ss_likelihood.R')
+source('get_latent_sample.R')
 source('optim_p11.R')
 
 ## ------------ Sampler Test Run -----------##
@@ -70,7 +71,7 @@ C <- cbind(Cf, Cw, Cr, Clit, Csom)
 buildCpred <- Cpred(p[1,], C, LAI, maxt, mint, Ca, lat_e, yearday, Nit_e, rad, 730)
 G = buildCpred$G
 Cpredi <- cbind(buildCpred$Cfpred, buildCpred$Cwpred, buildCpred$Crpred,
-               buildCpred$Clitpred, buildCpred$Csompred)
+                buildCpred$Clitpred, buildCpred$Csompred)
 rm(buildCpred)
 
 ## ----- Performing MCMC ------ ##
@@ -100,9 +101,9 @@ pupper <- c(.01, .7, .5, .5, .1, .01, .01, .1, .01, .2, 20)
 p[,11] <- rep(p_11_est, chain_length)
 p[1,1:11] <- .5*(pupper[1:11] + plower[1:11])
 p[,11] = rep(18, chain_length)
-sd[11] = .05
-sd[2] = .05
-sd[3] = .03
+#sd[11] = .05
+#sd[2] = .05
+#sd[3] = .03
 
 prec_obs_sample = matrix(1, nrow = chain_length, ncol = 5)
 
@@ -114,7 +115,7 @@ for (i in 2:chain_length){
   p[i,] <- p[i-1,]
   buildCpredi <- Cpred(p[i,], C_samples[, , i-1], LAI_ = pmax(.1, C_samples[,1,i-1]/LMA_e), maxt, mint, Ca, lat_e, yearday, Nit_e, rad, 730)
   Cpredi <- cbind(buildCpredi$Cfpred, buildCpredi$Cwpred, buildCpredi$Crpred,
-                 buildCpredi$Clitpred, buildCpredi$Csompred)
+                  buildCpredi$Clitpred, buildCpredi$Csompred)
   Gpred <- buildCpredi$G
   rm(buildCpredi)
   for (j in 1:11){
@@ -132,7 +133,7 @@ for (i in 2:chain_length){
     rm(buildCpredstar)
     
     threshold <- cpp_ss_likelihood(C_obs, C_samples[, , i-1], 1 / prec_obs_sample[i-1,], Cpred_star, var_add, 
-                                  c(100,9200,100,20,11000), c(4,4,4,4,4), 730, Gpred_star, G_e) - 
+                                   c(100,9200,100,20,11000), c(4,4,4,4,4), 730, Gpred_star, G_e) - 
       cpp_ss_likelihood(C_obs, C_samples[, , i-1], 1 / prec_obs_sample[i-1,], Cpredi, var_add, 
                         c(100,9200,100,20,11000), c(4,4,4,4,4), 730, Gpred, G_e)
     if (log(runif(1,0,1)) < threshold){
@@ -149,119 +150,80 @@ for (i in 2:chain_length){
   }
   ## Gibbs Step for C_i for the initial state
   C_samples[,,i] <- C_samples[,,i-1]
-  a_t <- 1 - p[i,5]
-  b_t <- G[1]*(p[i,2])
-  C_samples[1,1,i] <- rnorm(1, 
-                            mean = (prec_obs_sample[i-1,1]*C_obs[1,1] + prec_add[1]*a_t*C_samples[2, 1,i] - 
-                                      prec_add[1]*a_t*b_t + prec_init[1]*init_mean[1] ) / 
-                              (prec_obs_sample[i-1,1] + (a_t^2)*prec_add[1] + prec_init[1] ), 
-                            sd = 1 / sqrt((prec_obs_sample[i-1,1] + (a_t^2)*prec_add[1] + prec_init[1] ) ))
-  a_t <- 1 - p[i,6]
-  b_t <- G[1]*(p[i,3])
-  C_samples[1,2,i] <- rnorm(1, 
-                            mean = (prec_obs_sample[i-1,2]*C_obs[1,2] + prec_add[2]*a_t*C_samples[2, 2,i] 
-                                    - prec_add[2]*a_t*b_t + prec_init[2]*init_mean[2] ) / 
-                              (prec_obs_sample[i-1,2] + (a_t^2)*prec_add[2] + prec_init[2] ), 
-                            sd = 1 / sqrt((prec_obs_sample[i-1,2] + (a_t^2)*prec_add[2] + prec_init[2] ) ))
   
-  a_t <- 1-p[i,7]
-  b_t <- G[1]*p[i,4]
-  C_samples[1,3,i] <- rnorm(1, 
-                            mean = (prec_obs_sample[i-1,3]*C_obs[1,3] + prec_add[3]*a_t*C_samples[2, 3,i] 
-                                    - prec_add[3]*a_t*b_t + prec_init[3]*init_mean[3] ) / 
-                              (prec_obs_sample[i-1,3] + (a_t^2)*prec_add[3] + prec_init[3] ), 
-                            sd = 1 / sqrt((prec_obs_sample[i-1,3] + (a_t^2)*prec_add[3] + prec_init[3] ) ))
+  C_samples[1,1,i] <- get_latent_sample(at = 1 - p[i,5], bt = G[1]*(1-p[i,2])*p[i,3], initial_prec = prec_init[1], add_prec = prec_add[1],
+                                        obs_prec = prec_obs_sample[i-1,1], init_mean = init_mean[1], xtp1 = C_samples[2, 1,i], 
+                                        data = C_obs[1,1], type = 'first')
   
-  a_t <- (1 - .5*exp(.5*p[i,10]*(mint[1] + maxt[1]))*(p[i,8]+p[i,1]))
-  b_t <- p[i,5]*C_samples[1,1,i] + p[i,7]*C_samples[1,3,i]
-  C_samples[1,4,i] <- rnorm(1, 
-                            mean = (prec_obs_sample[i-1,4]*C_obs[1,4] + prec_add[4]*a_t*C_samples[2, 4,i] 
-                                    - prec_add[4]*a_t*b_t + prec_init[4]*init_mean[4] ) / 
-                              (prec_obs_sample[i-1,4] + (a_t^2)*prec_add[4] + prec_init[4] ), 
-                            sd = 1 / sqrt((prec_obs_sample[i-1,4] + (a_t^2)*prec_add[4] + prec_init[4] ) ))
+  C_samples[1,2,i] <- get_latent_sample(at = 1 - p[i,6], bt = G[1]*(1 - p[i,2])*(1 - p[i,3])*(1 - p[i,4]), initial_prec = prec_init[2], 
+                                        add_prec = prec_add[2], obs_prec = prec_obs_sample[i-1,2], init_mean = init_mean[2], 
+                                        xtp1 = C_samples[2, 2,i], data = C_obs[1,2], type = 'first')
   
-  a_t <- 1 - .5*p[i,9]*exp(.5*p[i,10]*(maxt[1] + mint[1]))
-  b_t <- p[i,6]*C_samples[1,2,i] + .5*p[i,1]*exp(.5*p[i,10]*(mint[1] + maxt[1]))*C_samples[1,4,i]
-  C_samples[1,5,i] <- rnorm(1, 
-                            mean = (prec_obs_sample[i-1,5]*C_obs[1,5] + prec_add[5]*a_t*C_samples[2, 5,i] 
-                                    - prec_add[5]*a_t*b_t + prec_init[5]*init_mean[5] ) / 
-                              (prec_obs_sample[i-1,5] + (a_t^2)*prec_add[5] + prec_init[5] ), 
-                            sd = 1 / sqrt((prec_obs_sample[i-1,5] + (a_t^2)*prec_add[5] + prec_init[5] ) ))
+  C_samples[1,3,i] <- get_latent_sample(at = 1 - p[i,7], bt = G[1]*(1-p[i,2])*(1-p[i,3])*p[i,4], initial_prec = prec_init[3], 
+                                        add_prec = prec_add[3], obs_prec = prec_obs_sample[i-1,3], init_mean = init_mean[3], 
+                                        xtp1 = C_samples[2, 3,i], data = C_obs[1,3], type = 'first')
+  
+  C_samples[1,4,i] <- get_latent_sample(at = (1 - .5*exp(.5*p[i,10]*(mint[1] + maxt[1]))*(p[i,8]+p[i,1])), 
+                                        bt = p[i,5]*C_samples[1,1,i] + p[i,7]*C_samples[1,3,i], initial_prec = prec_init[4], 
+                                        add_prec = prec_add[4], obs_prec = prec_obs_sample[i-1,4], init_mean = init_mean[4], 
+                                        xtp1 = C_samples[2, 4,i], data = C_obs[1,4], type = 'first')
+  
+  C_samples[1,5,i] <- get_latent_sample(at = 1 - .5*p[i,9]*exp(.5*p[i,10]*(maxt[1] + mint[1])), 
+                                        bt = p[i,6]*C_samples[1,2,i] + .5*p[i,1]*exp(.5*p[i,10]*(mint[1] + maxt[1]))*C_samples[1,4,i], 
+                                        initial_prec = prec_init[5], add_prec = prec_add[5], obs_prec = prec_obs_sample[i-1,5], 
+                                        init_mean = init_mean[5], xtp1 = C_samples[2, 5,i], data = C_obs[1,5], type = 'first')
+  
   ## Gibbs Step for Cobs_i for the inital state
   
   for (k in 2:729){
     ## Gibbs steps for "middle" latent states
-    a_t <- 1 - p[i,5]
-    a_tp <- 1 - p[i,5]
-    b_t <- G[k]*(1-p[i,2])*p[i,3]
-    b_tp <- G[k+1]*(1-p[i,2])*p[i,3]
+    C_samples[k,1,i] <- get_latent_sample(at = 1 - p[i,5], atp = 1 - p[i,5], bt = G[k]*(1-p[i,2])*p[i,3], btp = G[k+1]*(1-p[i,2])*p[i,3],
+                                         obs_prec = prec_obs_sample[i-1,1], add_prec = prec_add[1], xtm1 = C_samples[k-1,1,i], 
+                                         xtp1 = C_samples[k+1,1,i], data = C_obs[k,1], type = 'middle')
     
-    C_samples[k,1,i] <- rnorm(n = 1, 
-                      mean = (prec_add[1]*(a_t*C_samples[k-1,1,i] +b_t ) + prec_add[1]*(a_tp*C_samples[k+1,1,i]-a_tp*b_tp) 
-                      + prec_obs_sample[i-1,1]*C_obs[k,1]) / (prec_add[1]*(1 + (a_tp)^2 ) + prec_obs_sample[i-1,1]),
-                      sd = 1 / sqrt((prec_add[1]*(1 + (a_tp)^2 ) + prec_obs_sample[i-1,1])))
+    C_samples[k,2,i] <- get_latent_sample(at = 1 - p[i,6], atp = 1 - p[i,6], bt = G[k]*(1 - p[i,2])*(1 - p[i,3])*(1 - p[i,4]), 
+                                         btp = G[k+1]*(1 - p[i,2])*(1 - p[i,3])*(1 - p[i,4]),
+                                         obs_prec = prec_obs_sample[i-1,2], add_prec = prec_add[2], xtm1 = C_samples[k-1,2,i], 
+                                         xtp1 = C_samples[k+1,2,i], data = C_obs[k,2], type = 'middle')
     
-    a_t <- 1 - p[i,6]
-    a_tp <- 1 - p[i,6]
-    b_t <- G[k]*(1 - p[i,2])*(1 - p[i,3])*(1 - p[i,4])
-    b_tp <- G[k+1]*(1 - p[i,2])*(1 - p[i,3])*(1 - p[i,4])
+    C_samples[k,3,i] <- get_latent_sample(at = 1 - p[i,7], atp = 1 - p[i,7], bt = G[k]*(1-p[i,2])*(1-p[i,3])*p[i,4], 
+                                         btp = G[k+1]*(1-p[i,2])*(1-p[i,3])*p[i,4],
+                                         obs_prec = prec_obs_sample[i-1,3], add_prec = prec_add[3], xtm1 = C_samples[k-1,3,i], 
+                                         xtp1 = C_samples[k+1,3,i], data = C_obs[k,3], type = 'middle')
     
-    C_samples[k,2,i] <- rnorm(n = 1, 
-                      mean = (prec_add[2]*(a_t*C_samples[k-1,2,i] +b_t ) + prec_add[2]*(a_tp*C_samples[k+1,2,i]-a_tp*b_tp) 
-                      + prec_obs_sample[i-1,2]*C_obs[k,2]) / (prec_add[2]*(1 + (a_tp)^2 ) + prec_obs_sample[i-1,2]),
-                      sd = 1 / sqrt((prec_add[2]*(1 + (a_tp)^2 ) + prec_obs_sample[i-1,2])))
+    C_samples[k,4,i] <- get_latent_sample(at = (1 - .5*exp(.5*p[i,10]*(mint[k] + maxt[k]))*(p[i,8]+p[i,1])),
+                                         atp = (1 - .5*exp(.5*p[i,10]*(mint[k+1] + maxt[k+1]))*(p[i,8]+p[i,1])), 
+                                         bt = p[i,5]*C_samples[k-1,1,i] + p[i,7]*C_samples[k-1,3,i], 
+                                         btp = p[i,5]*C_samples[k,1,i] + p[i,7]*C_samples[k,3,i],
+                                         obs_prec = prec_obs_sample[i-1,4], add_prec = prec_add[4], xtm1 = C_samples[k-1,4,i], 
+                                         xtp1 = C_samples[k+1,4,i], data = C_obs[k,4], type = 'middle')
     
-    a_t <- 1-p[i,7]
-    a_tp <- 1-p[i,7]
-    b_t <- G[k]*(1-p[i,2])*(1-p[i,3])*p[i,4]
-    b_tp <- G[k+1]*(1-p[i,2])*(1-p[i,3])*p[i,4]
-    
-    C_samples[k,3,i] <- rnorm(n = 1, 
-                      mean = (prec_add[3]*(a_t*C_samples[k-1,3,i] +b_t ) + prec_add[3]*(a_tp*C_samples[k+1,3,i]-a_tp*b_tp) 
-                      + prec_obs_sample[i-1,3]*C_obs[k,3]) / (prec_add[3]*(1 + (a_tp)^2 ) + prec_obs_sample[i-1,3]),
-                      sd = 1 / sqrt((prec_add[3]*(1 + (a_tp)^2 ) + prec_obs_sample[i-1,3])))
-    
-    a_t <- (1 - .5*exp(.5*p[i,10]*(mint[k] + maxt[k]))*(p[i,8]+p[i,1]))
-    a_tp <- (1 - .5*exp(.5*p[i,10]*(mint[k+1] + maxt[k+1]))*(p[i,8]+p[i,1]))
-      
-    b_t <- p[i,5]*C_samples[k-1,1,i] + p[i,7]*C_samples[k-1,3,i]
-    b_tp <- p[i,5]*C_samples[k,1,i] + p[i,7]*C_samples[k,3,i]
-    
-    C_samples[k,4,i] <- rnorm(n = 1, 
-                      mean = (prec_add[4]*(a_t*C_samples[k-1,4,i] +b_t ) + prec_add[4]*(a_tp*C_samples[k+1,4,i]-a_tp*b_tp) 
-                      + prec_obs_sample[i-1,4]*C_obs[k,4]) / (prec_add[4]*(1 + (a_tp)^2 ) + prec_obs_sample[i-1,4]),
-                      sd = 1 / sqrt((prec_add[4]*(1 + (a_tp)^2 ) + prec_obs_sample[i-1,4])))
-    
-    a_t <- 1 - .5*p[i,9]*exp(.5*p[i,10]*(maxt[k] + mint[k]))
-    a_tp <- 1 - .5*p[i,9]*exp(.5*p[i,10]*(maxt[k+1] + mint[k+1]))
-    
-    b_t <- p[i,6]*C_samples[k-1,2,i] + .5*p[i,1]*exp(.5*p[i,10]*(mint[k] + maxt[k]))*C_samples[k-1,4,i]
-    b_tp <- p[i,6]*C_samples[k,2,i] + .5*p[i,1]*exp(.5*p[i,10]*(mint[k+1] + maxt[k+1]))*C_samples[k,4,i]
-    
-    
-    C_samples[k,5,i] <- rnorm(n = 1, 
-                      mean = (prec_add[5]*(a_t*C_samples[k-1,5,i] +b_t ) + prec_add[5]*(a_tp*C_samples[k+1,5,i]-a_tp*b_tp) 
-                      + prec_obs_sample[i-1,5]*C_obs[k,5]) / (prec_add[5]*(1 + (a_tp)^2 ) + prec_obs_sample[i-1,5]),
-                      sd = 1 / sqrt((prec_add[5]*(1 + (a_tp)^2 ) + prec_obs_sample[i-1,5])))
+    C_samples[k,5,i] <- get_latent_sample(at = 1 - .5*p[i,9]*exp(.5*p[i,10]*(maxt[k] + mint[k])),
+                                         atp = 1 - .5*p[i,9]*exp(.5*p[i,10]*(maxt[k+1] + mint[k+1])), 
+                                         bt = p[i,6]*C_samples[k-1,2,i] + .5*p[i,1]*exp(.5*p[i,10]*(mint[k] + maxt[k]))*C_samples[k-1,4,i], 
+                                         btp = p[i,6]*C_samples[k,2,i] + .5*p[i,1]*exp(.5*p[i,10]*(mint[k+1] + maxt[k+1]))*C_samples[k,4,i],
+                                         obs_prec = prec_obs_sample[i-1,5], add_prec = prec_add[5], xtm1 = C_samples[k-1,5,i], 
+                                         xtp1 = C_samples[k+1,5,i], data = C_obs[k,5], type = 'middle')
   }
   ## Gibbs steps for final state
-  C_samples[730, 1, i] <- rnorm(n = 1, 
-                               mean = (prec_add[1]*C_samples[729, 1, i] + prec_obs_sample[i-1,1]*C_obs[730, 1]) / (prec_add[1] + prec_obs_sample[i-1,1]),
-                               sd = 1 / sqrt(prec_add[1] + prec_obs_sample[i-1,1]))
-  C_samples[730, 2, i] <- rnorm(n = 1, 
-                               mean = (prec_add[2]*C_samples[729, 2, i] + prec_obs_sample[i-1,2]*C_obs[730, 2]) / (prec_add[2] + prec_obs_sample[i-1,2]),
-                               sd = 1 / sqrt(prec_add[2] + prec_obs_sample[i-1,2]))
-  C_samples[730, 3, i] <- rnorm(n = 1, 
-                               mean = (prec_add[3]*C_samples[729, 3, i] + prec_obs_sample[i-1,3]*C_obs[730, 3]) / (prec_add[3] + prec_obs_sample[i-1,3]),
-                               sd = 1 / sqrt(prec_add[3] + prec_obs_sample[i-1,3]))
-  C_samples[730, 4, i] <- rnorm(n = 1, 
-                               mean = (prec_add[4]*C_samples[729, 4, i] + prec_obs_sample[i-1,4]*C_obs[730, 4]) / (prec_add[4] + prec_obs_sample[i-1,4]),
-                               sd = 1 / sqrt(prec_add[4] + prec_obs_sample[i-1,4]))
-  C_samples[730, 5, i] <- rnorm(n = 1, 
-                               mean = (prec_add[5]*C_samples[729, 5, i] + prec_obs_sample[i-1,5]*C_obs[730, 5]) / (prec_add[5] + prec_obs_sample[i-1,5]),
-                               sd = 1 / sqrt(prec_add[5] + prec_obs_sample[i-1,5]))
+  C_samples[730, 1, i] <- get_latent_sample(at = 1 - p[i,5], bt = G[k]*(1-p[i,2])*p[i,3], obs_prec = prec_obs_sample[i-1, 1],
+                                            add_prec = prec_add[1], xtm1 = C_samples[729, 1, i], data = C_obs[730, 1], type = 'last')
   
-  if (i %% 100 == 0){
+  C_samples[730, 2, i] <- get_latent_sample(at = 1 - p[i,6], bt = G[k]*(1 - p[i,2])*(1 - p[i,3])*(1 - p[i,4]), obs_prec = prec_obs_sample[i-1, 2],
+                                            add_prec = prec_add[2], xtm1 = C_samples[729, 2, i], data = C_obs[730, 2], type = 'last')
+  
+  C_samples[730, 3, i] <- get_latent_sample(at = 1 - p[i,7], bt = G[k]*(1-p[i,2])*(1-p[i,3])*p[i,4], obs_prec = prec_obs_sample[i-1, 3],
+                                            add_prec = prec_add[3], xtm1 = C_samples[729, 3, i], data = C_obs[730, 3], type = 'last')
+  
+  C_samples[730, 4, i] <- get_latent_sample(at = (1 - .5*exp(.5*p[i,10]*(mint[730] + maxt[730]))*(p[i,8]+p[i,1])), 
+                                            bt = p[i,5]*C_samples[729,1,i] + p[i,7]*C_samples[729,3,i], obs_prec = prec_obs_sample[i-1, 4],
+                                            add_prec = prec_add[4], xtm1 = C_samples[729, 4, i], data = C_obs[730, 4], type = 'last')
+  
+  C_samples[730, 5, i] <- get_latent_sample(at = 1 - .5*p[i,9]*exp(.5*p[i,10]*(maxt[730] + mint[730])), 
+                                            bt = p[i,6]*C_samples[729,2,i] + .5*p[i,1]*exp(.5*p[i,10]*(mint[730] + maxt[730]))*C_samples[729,4,i], 
+                                            obs_prec = prec_obs_sample[i-1, 5], add_prec = prec_add[5], xtm1 = C_samples[729, 5, i], data = C_obs[730, 5], 
+                                            type = 'last')
+  if (i %% 500 == 0){
     cat(paste(i, 'iterations done \n'))
     #print(sd)
     print(colMeans(acceptance[(1:i),]))
@@ -293,8 +255,8 @@ for (j in 1:5){
   #png(filename = paste0(paste0('./Plots/sd_obs',j),'.png'))
   hist(prec_obs_sample[burn:chain_length, j], breaks = 50, main = paste0('True Value is ', prec_obs[j]))
   #dev.off()
-  #cat(paste('The mean is', mean(prec_obs_sample[burn:chain_length,j])))
-  #cat('\n')
+  cat(paste('The mean is', mean(prec_obs_sample[burn:chain_length,j])))
+  cat('\n')
   readline('Press Enter')
 }
 
@@ -351,9 +313,9 @@ points(rowMeans(C_samples[,5,burn:chain_length]), type = 'l', col = 'red')
 ## Comparison of fits via likelihood
 buildCpred_true <- Cpred(p_e, C, LAI, maxt, mint, Ca, lat_e, yearday, Nit_e, rad, 730)
 Cpred_true <- cbind(buildCpred_true$Cfpred, buildCpred_true$Cwpred, buildCpred_true$Crpred,
-      buildCpred_true$Clitpred, buildCpred_true$Csompred)
+                    buildCpred_true$Clitpred, buildCpred_true$Csompred)
 LL1 <- cpp_ss_likelihood(C_obs, C, c(.25,16,2.25, .25, 9), Cpred_true, c(sd_cf^2,sd_cw^2,sd_cr^2, sd_clit^2, sd_csom^2), 
-                  c(100,9200,100,20,11000), c(4,4,4,4,4), 730)
+                         c(100,9200,100,20,11000), c(4,4,4,4,4), 730)
 
 p_algo <- rep(0, 11)
 for (i in 1:11){
@@ -365,22 +327,6 @@ Cobs_guess = cbind(rowMeans(C_obs[,1,]), rowMeans(C_obs[,2,]), rowMeans(C_obs[,3
                    rowMeans(C_obs[,4,]), rowMeans(C_obs[,5,]))
 buildCpred_guess <- Cpred(p_algo, C_guess, LAI, maxt, mint, Ca, lat_e, yearday, Nit_e, rad, 730)
 Cpred_guess <- cbind(buildCpred_guess$Cfpred, buildCpred_guess$Cwpred, buildCpred_guess$Crpred,
-                    buildCpred_guess$Clitpred, buildCpred_guess$Csompred)
+                     buildCpred_guess$Clitpred, buildCpred_guess$Csompred)
 LL2 <- cpp_ss_likelihood(C_obs, C_guess, c(.25,16,2.25, .25, 9), Cpred_guess, c(sd_cf^2,sd_cw^2,sd_cr^2, sd_clit^2, sd_csom^2), 
                          c(100,9200,100,20,11000), c(4,4,4,4,4), 730)
-
-## turn off adaptive part
-## pairs plots
-## sample these in log space
-
-## set all parameters to be fixed 
-## fix p_2 at .40889, try fitting
-## try fitting just the latent states with ALL parameters fixed, see if there is a problem there
-## multiple synthetic data sets?
-
-## start with predicted GPP
-## add g fluxes into the likelihood
-## check how robust we are to process noise and observational noise
-## robust to thinning data / missing data?
-
-## try transforming variables at the end rather than inside the loop

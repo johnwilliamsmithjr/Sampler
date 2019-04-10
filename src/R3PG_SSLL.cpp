@@ -32,19 +32,19 @@ RcppExport SEXP SSLL(SEXP Cobs_, SEXP C_, SEXP Sigma_, SEXP Cpred_, SEXP sd_, SE
   Rcpp::NumericVector G_e = Rcpp::as<Rcpp::NumericVector>(G_e_);
   Rcpp::NumericVector g_sig = Rcpp::as<Rcpp::NumericVector>(g_sig_);
   // coerce vector and matrix valued inputs to Rcpp objects
-  log_lik = LMVND_LL::lmvnd(Rcpp::as<vector<double> >(Sigma), Rcpp::as<vector<double> > (Cobsrow), Rcpp::as<vector<double> > (Crow), 5);
-  log_lik = log_lik + LMVND_LL::lmvnd(Rcpp::as<vector<double> >(init_sd), Rcpp::as<vector<double> >(Crow), Rcpp::as<vector<double> >(init_mean), 5);
+  log_lik = LMVND_LL::lmvnd(Rcpp::as<vector<double> >(Sigma), Rcpp::as<vector<double> > (Cobsrow), Rcpp::as<vector<double> > (Crow), 9);
+  log_lik = log_lik + LMVND_LL::lmvnd(Rcpp::as<vector<double> >(init_sd), Rcpp::as<vector<double> >(Crow), Rcpp::as<vector<double> >(init_mean), 9);
   for (int i=1; i<N; i++) {
     Cobsrow = Cobs(i,Rcpp::_);
     Crow = C(i,Rcpp::_);
     Cprow = Cpred(i, Rcpp::_);
-    log_lik = log_lik + LMVND_LL::lmvnd(Rcpp::as<vector<double> >(sd), Rcpp::as<vector<double> > (Crow), Rcpp::as<vector<double> > (Cprow), 5);
+    log_lik = log_lik + LMVND_LL::lmvnd(Rcpp::as<vector<double> >(sd), Rcpp::as<vector<double> > (Crow), Rcpp::as<vector<double> > (Cprow), 9);
     if (std::count(ind.begin(), ind.end(), i)){
       Cobsrow = Cobs(i,Rcpp::_);
-      log_lik = log_lik + LMVND_LL::lmvnd(Rcpp::as<vector<double> >(Sigma), Rcpp::as<vector<double> > (Cobsrow), Rcpp::as<vector<double> > (Crow), 5);
+      log_lik = log_lik + LMVND_LL::lmvnd(Rcpp::as<vector<double> >(Sigma), Rcpp::as<vector<double> > (Cobsrow), Rcpp::as<vector<double> > (Crow), 9);
     }
   }
-  log_lik = log_lik + LMVND_LL::lmvnd(Rcpp::as<vector<double> >(g_sig), Rcpp::as<vector<double> > (G), Rcpp::as<vector<double> > (G_e), 730);
+  log_lik = log_lik + LMVND_LL::lmvnd(Rcpp::as<vector<double> >(g_sig), Rcpp::as<vector<double> > (G), Rcpp::as<vector<double> > (G_e), 108);
   //double a = Rcpp::as<double>(a_);
   //double b = Rcpp::as<double>(b_);
   //vector<double> X = Rcpp::as<vector<double> >(sd_);
