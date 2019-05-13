@@ -6,3 +6,8 @@ process precisions, observation precisions, and others. This file will also load
 Rcpp, matrixStats, and others. C++ code that implements the process models is compiled here so that it may be called from R. 
 R functions that aggregrate the data to call the likelihood function from C++ as well as the latent state updates are also
 run here.
+
+Some directories here (Plots, in particular) are antiquated and will be removed in future updates.
+
+Thank you!
+John
